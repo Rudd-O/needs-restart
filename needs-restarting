@@ -19,17 +19,6 @@ class DBusError(subprocess.CalledProcessError):
         return "Command '%s' returned non-zero exit status %d with stderr %r" % (self.cmd, self.returncode, self.erroutput)
 
 
-def mapped_for_execution(pid, paths):
-    """Given a list of paths, return the ones that have been memory-mapped for execution."""
-    if not paths:
-        return
-    maps = [ (x[18:22], x[73:-1]) for x in file("/proc/%d/maps" % pid).readlines() if x ]
-    mapdict = dict()
-    for mode, path in maps:
-        if "x" in mode:
-            mapdict[path] = True
-    return [ p for p in paths if p in mapdict ]
-
 def unit_name(pid):
     """Get the systemd unit name associated with the PID.  Returns None
     if no unit associated, or no Python D-Bus support on this system."""
