@@ -215,7 +215,7 @@ def get_column_width():
     try:
         rows, columns = subprocess.check_output(['stty', 'size'], stderr=open(os.devnull, "w")).split()
         columns = int(columns)
-    except CalledProcessError:
+    except subprocess.CalledProcessError:
         columns = None
     return columns
 
