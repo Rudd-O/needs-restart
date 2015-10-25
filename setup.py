@@ -5,7 +5,7 @@ import os
 
 dir = os.path.dirname(__file__)
 path_to_readme = os.path.join(dir, "README.md")
-version = "0.0.1"
+version = "0.0.2"
 readme = open(path_to_readme).read(-1)
 
 classifiers = [
