@@ -22,17 +22,17 @@ classifiers = [
 ]
 
 setup(
-	name = 'needs-restarting',
+	name = 'needs-restart',
 	version=version,
 	description = 'A program to discover services that need restarting',
 	long_description = readme,
 	author='Manuel Amador (Rudd-O)',
 	author_email='rudd-o@rudd-o.com',
 	license="GPL",
-	url = 'http://github.com/Rudd-O/needs-restarting',
+	url = 'http://github.com/Rudd-O/needs-restart',
 	package_dir=dict(),
 	classifiers = classifiers,
-	scripts = ["needs-restarting"],
+	scripts = ["needs-restart"],
 	keywords = "systemd services",
 	zip_safe=False,
 )

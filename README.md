@@ -1,4 +1,4 @@
-# The needs-restarting program
+# The needs-restart program
 
 This is a brief program that helps you detect which services on your
 system need to be restarted after an upgrade or redeploy of your
@@ -6,7 +6,7 @@ software.
 
 Here is some example output:
 
-    [root@machine root]# needs-restarting
+    [root@machine root]# needs-restart
     * unit: (no unit)
       * PID: 1
         command: /usr/lib/systemd/systemd --switched-root --system...
