@@ -119,7 +119,7 @@ def splitinodepath(buf):
     return inode, path
 
 def get_needs_restarting(ignore_prefixes=None):
-    """Gets list of processes that need restarting, along with reasons.
+    """Gets list of processes that need restarting, each with its reasons.
 
     Args:
         ignore_prefixes: iterable of path prefixes to ignore in the analysis
