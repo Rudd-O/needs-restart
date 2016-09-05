@@ -3,6 +3,7 @@
 
 import argparse
 import collections
+import cPickle
 import errno
 import glob
 import os
@@ -12,20 +13,54 @@ import sys
 import tempfile
 
 
-class DBusError(subprocess.CalledProcessError):
+class HelperError(subprocess.CalledProcessError):
     def __init__(self, returncode, cmd, output=None, erroutput=None):
         subprocess.CalledProcessError.__init__(self, returncode, cmd, output)
         self.erroutput = erroutput
     def __str__(self):
         return "Command '%s' returned non-zero exit status %d with stderr %r" % (self.cmd, self.returncode, self.erroutput)
 
+class DBusError(HelperError): pass
+
+def mapcache(container):
+    def f(functocache):
+        def actualfunc(*a, **kw):
+            cachekey = cPickle.dumps((a, kw))
+            if cachekey in container:
+                res = container[cachekey]
+                if isinstance(res, Exception):
+                    raise res
+                return res
+            try:
+                v = functocache(*a, **kw)
+                container[cachekey] = v
+                return v
+            except Exception, e:
+                container[cachekey] = e
+                raise
+        return actualfunc
+    return f
+
+@mapcache({})
+def helper(cmd):
+    """Return standard output of command, or raise HelperError."""
+    env = dict(os.environ)
+    env["LANG"] = "C"
+
+    errfile = tempfile.TemporaryFile()
+    try:
+        out = subprocess.check_output(cmd, stderr=errfile, env=env)
+    except subprocess.CalledProcessError, e:
+        errfile.seek(0,0)
+        erroutput = errfile.read()
+        raise HelperError(e.returncode, e.cmd, e.output, erroutput)
+    finally:
+        errfile.close()
+    return out
 
 def unit_name(pid):
     """Get the systemd unit name associated with the PID.  Returns None
     if no unit associated, or no Python D-Bus support on this system."""
-    env = dict(os.environ)
-    env["LANG"] = "C"
-
     cmd = [
         "dbus-send",
         "--print-reply=literal",
@@ -35,18 +70,12 @@ def unit_name(pid):
         "org.freedesktop.systemd1.Manager.GetUnitByPID",
         "uint32:%d"%pid,
     ]
-    errfile = tempfile.TemporaryFile()
     try:
-        out = subprocess.check_output(cmd, stderr=errfile, env=env)
-    except subprocess.CalledProcessError, e:
-        errfile.seek(0,0)
-        errdata = errfile.read()
-        if e.returncode == 1:
-            if "does not belong to any loaded unit" in errdata:
-                return None
-        raise DBusError(e.returncode, e.cmd, e.output, errdata)
-    finally:
-        errfile.close()
+        out = helper(cmd)
+    except HelperError, e:
+        if e.returncode == 1 and "does not belong to any loaded unit" in e.erroutput:
+            return None
+        raise DBusError(e.returncode, e.cmd, e.output, e.erroutput)
 
     unit_path = out.strip()
 
@@ -62,13 +91,9 @@ def unit_name(pid):
     ]
     errfile = tempfile.TemporaryFile()
     try:
-        out = subprocess.check_output(cmd, stderr=errfile, env=env)
-    except subprocess.CalledProcessError, e:
-        errfile.seek(0,0)
-        errdata = errfile.read()
-        raise DBusError(e.returncode, e.cmd, e.output, errdata)
-    finally:
-        errfile.close()
+        out = helper(cmd)
+    except HelperError, e:
+        raise DBusError(e.returncode, e.cmd, e.output, e.erroutput)
 
     return re.sub(" +variant +", "", out.rstrip())
 
