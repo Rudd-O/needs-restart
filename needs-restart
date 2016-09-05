@@ -58,6 +58,21 @@ def helper(cmd):
         errfile.close()
     return out
 
+def package(f):
+    """Get the name of the package containing the specified file.
+
+    Returns None when the file is not known to RPM."""
+    cmd = ["rpm", "-qf", "--", f]
+    try:
+        out = helper(cmd)
+    except HelperError, e:
+        if e.returncode == 1 and e.erroutput.endswith("No such file or directory\n"):
+            return None
+        raise
+    if out.endswith("is not owned by any package\n"):
+        return None
+    return out[:-1]
+
 def unit_name(pid):
     """Get the systemd unit name associated with the PID.  Returns None
     if no unit associated, or no Python D-Bus support on this system."""
@@ -196,6 +211,25 @@ def get_needs_restarting(ignore_prefixes=None):
                     )
     return needs_restarting
 
+def add_package_info(needs_restarting):
+    """Take the result of needs_restarting and substitute files
+    for package names when possible."""
+    new_needs_restarting = collections.OrderedDict()
+    for pid, filesandreasons in needs_restarting.iteritems():
+        new_needs_restarting[pid] = collections.OrderedDict()
+        for name, reason in filesandreasons.iteritems():
+            already = set()
+            inpkg = False
+            pkg = package(name)
+            if pkg:
+                inpkg = True
+                if pkg not in already:
+                    new_needs_restarting[pid][pkg] = "was installed as an update"
+                    already.add(pkg)
+            if not inpkg:
+                new_needs_restarting[pid][name] = reason
+    return new_needs_restarting
+
 def aggregate_by_systemd_service(needs_restarting):
     by_service = collections.OrderedDict()
     for pid, files in needs_restarting.items():
@@ -216,6 +250,14 @@ def get_parser():
         help="bare form – only list the units that need restarting",
         action="store_true",
         dest="bare",
+        default=False,
+    )
+    parser.add_argument(
+        "-p",
+        help="show updated packages instead of updated paths whenever "
+             "possible; has no effect when -b is specified",
+        action="store_true",
+        dest="pkgs",
         default=False,
     )
     parser.add_argument(
@@ -249,6 +291,8 @@ def main():
     columns = get_column_width()
 
     needs_restarting = get_needs_restarting(args.ignore_prefixes)
+    if args.pkgs:
+        needs_restarting = add_package_info(needs_restarting)
     by_service = aggregate_by_systemd_service(needs_restarting)
     for service, processes in by_service.items():
         if args.system_only and service and (
