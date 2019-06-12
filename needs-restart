@@ -1,9 +1,9 @@
-#!/usr/bin/env python
+#!/usr/bin/python3
 # -*- coding: utf-8 -*-
 
 import argparse
 import collections
-import cPickle
+import pickle
 import errno
 import glob
 import os
@@ -25,7 +25,7 @@ class DBusError(HelperError): pass
 def mapcache(container):
     def f(functocache):
         def actualfunc(*a, **kw):
-            cachekey = cPickle.dumps((a, kw))
+            cachekey = pickle.dumps((a, kw))
             if cachekey in container:
                 res = container[cachekey]
                 if isinstance(res, Exception):
@@ -35,7 +35,7 @@ def mapcache(container):
                 v = functocache(*a, **kw)
                 container[cachekey] = v
                 return v
-            except Exception, e:
+            except Exception as e:
                 container[cachekey] = e
                 raise
         return actualfunc
@@ -50,7 +50,7 @@ def helper(cmd):
     errfile = tempfile.TemporaryFile()
     try:
         out = subprocess.check_output(cmd, stderr=errfile, env=env)
-    except subprocess.CalledProcessError, e:
+    except subprocess.CalledProcessError as e:
         errfile.seek(0,0)
         erroutput = errfile.read()
         raise HelperError(e.returncode, e.cmd, e.output, erroutput)
@@ -65,7 +65,7 @@ def package(f):
     cmd = ["rpm", "-qf", "--", f]
     try:
         out = helper(cmd)
-    except HelperError, e:
+    except HelperError as e:
         if e.returncode == 1 and e.erroutput.endswith("No such file or directory\n"):
             return None
         raise
@@ -87,7 +87,7 @@ def unit_name(pid):
     ]
     try:
         out = helper(cmd)
-    except HelperError, e:
+    except HelperError as e:
         if e.returncode == 1 and "does not belong to any loaded unit" in e.erroutput:
             return None
         raise DBusError(e.returncode, e.cmd, e.output, e.erroutput)
@@ -107,7 +107,7 @@ def unit_name(pid):
     errfile = tempfile.TemporaryFile()
     try:
         out = helper(cmd)
-    except HelperError, e:
+    except HelperError as e:
         raise DBusError(e.returncode, e.cmd, e.output, e.erroutput)
 
     return re.sub(" +variant +", "", out.rstrip())
@@ -118,7 +118,7 @@ def has_changed(filename, old_inode):
     or (True, None) if the file was deleted."""
     try:
         stres = os.stat(filename)
-    except OSError, e:
+    except OSError as e:
         if e.errno == errno.ENOENT:
             return True, None
         raise
@@ -127,7 +127,9 @@ def has_changed(filename, old_inode):
     return False, old_inode
 
 def get_process_info(pid):
-    contents = file("/proc/%d/cmdline" % pid).read().split('\0')
+    contents = open("/proc/%d/cmdline" % pid).read().split('\0')
+    if contents[-1] == '':
+        contents.pop()
     return " ".join(contents).replace("\n", " ")
 
 def memoize(f, cache):
@@ -201,7 +203,7 @@ def get_needs_restarting(ignore_prefixes=None):
             and not x[1][1].startswith("[")
             and not any(x[1][1].startswith(p) for p in ignore_prefixes)
         )
-        for name, inode in map_to_inode.iteritems():
+        for name, inode in map_to_inode.items():
             if name.endswith(" (deleted)") and not os.path.exists(name):
                 name = name[:-10]
             if pid in needs_restarting and name in needs_restarting[pid]:
@@ -222,9 +224,9 @@ def add_package_info(needs_restarting):
     """Take the result of needs_restarting and substitute files
     for package names when possible."""
     new_needs_restarting = collections.OrderedDict()
-    for pid, filesandreasons in needs_restarting.iteritems():
+    for pid, filesandreasons in needs_restarting.items():
         new_needs_restarting[pid] = collections.OrderedDict()
-        for name, reason in filesandreasons.iteritems():
+        for name, reason in filesandreasons.items():
             already = set()
             inpkg = False
             pkg = package(name)
@@ -239,7 +241,7 @@ def add_package_info(needs_restarting):
 
 def aggregate_by_systemd_service(needs_restarting):
     by_service = collections.OrderedDict()
-    for pid, files in needs_restarting.items():
+    for pid, files in list(needs_restarting.items()):
         unitname = unit_name(pid)
         if unitname not in by_service:
             by_service[unitname] = []
@@ -301,7 +303,7 @@ def main():
     if args.pkgs:
         needs_restarting = add_package_info(needs_restarting)
     by_service = aggregate_by_systemd_service(needs_restarting)
-    for service, processes in by_service.items():
+    for service, processes in list(by_service.items()):
         if args.system_only and service and (
             service.startswith("user@") or
             service.startswith("session-")
@@ -309,20 +311,20 @@ def main():
             continue
         if args.bare:
             if service is not None:
-                print service
+                print(service)
         else:
             if service is None:
                 service = "(no unit)"
-            print "* unit: %s" % service
+            print("* unit: %s" % service)
             for pid, files in processes:
-                print "  * PID:", pid
+                print("  * PID:", pid)
                 cmd = get_process_info(pid)
                 line = "    command: %s" % cmd
                 if columns is not None and len(line) > columns:
                     line = line[:columns-3] + "..."
-                print line
-                for f, reason in files.iteritems():
-                    print "    *", f, reason
+                print(line)
+                for f, reason in files.items():
+                    print("    *", f, reason)
 
 if __name__ == "__main__":
     main()

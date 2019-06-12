@@ -1,11 +1,11 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 from setuptools import setup
 import os
 
 dir = os.path.dirname(__file__)
 path_to_readme = os.path.join(dir, "README.md")
-version = "0.0.5"
+version = "0.0.6"
 readme = open(path_to_readme).read(-1)
 
 classifiers = [
