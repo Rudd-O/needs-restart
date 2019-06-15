@@ -52,7 +52,7 @@ def helper(cmd):
         out = subprocess.check_output(cmd, stderr=errfile, env=env).decode("utf-8")
     except subprocess.CalledProcessError as e:
         errfile.seek(0,0)
-        erroutput = errfile.read()
+        erroutput = errfile.read().decode("utf-8")
         raise HelperError(e.returncode, e.cmd, e.output, erroutput)
     finally:
         errfile.close()
