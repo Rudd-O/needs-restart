@@ -1,4 +1,11 @@
 // https://github.com/Rudd-O/shared-jenkins-libraries
 @Library('shared-jenkins-libraries@master') _
 
-genericFedoraRPMPipeline()
+
+def skip_tests() {
+    return {
+        println "Tests skipped"
+    }
+}
+
+genericFedoraRPMPipeline(null, null, null, null, test_step)
