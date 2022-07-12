@@ -17,10 +17,18 @@ class HelperError(subprocess.CalledProcessError):
     def __init__(self, returncode, cmd, output=None, erroutput=None):
         subprocess.CalledProcessError.__init__(self, returncode, cmd, output)
         self.erroutput = erroutput
-    def __str__(self):
-        return "Command '%s' returned non-zero exit status %d with stderr %r" % (self.cmd, self.returncode, self.erroutput)
 
-class DBusError(HelperError): pass
+    def __str__(self):
+        return "Command '%s' returned non-zero exit status %d with stderr %r" % (
+            self.cmd,
+            self.returncode,
+            self.erroutput,
+        )
+
+
+class DBusError(HelperError):
+    pass
+
 
 def mapcache(container):
     def f(functocache):
@@ -38,8 +46,11 @@ def mapcache(container):
             except Exception as e:
                 container[cachekey] = e
                 raise
+
         return actualfunc
+
     return f
+
 
 @mapcache({})
 def helper(cmd):
@@ -51,12 +62,13 @@ def helper(cmd):
     try:
         out = subprocess.check_output(cmd, stderr=errfile, env=env).decode("utf-8")
     except subprocess.CalledProcessError as e:
-        errfile.seek(0,0)
+        errfile.seek(0, 0)
         erroutput = errfile.read().decode("utf-8")
         raise HelperError(e.returncode, e.cmd, e.output, erroutput)
     finally:
         errfile.close()
     return out
+
 
 def package(f):
     """Get the name of the package containing the specified file.
@@ -73,6 +85,7 @@ def package(f):
         return None
     return out[:-1]
 
+
 def unit_name(pid):
     """Get the systemd unit name associated with the PID.  Returns None
     if no unit associated, or no Python D-Bus support on this system."""
@@ -83,7 +96,7 @@ def unit_name(pid):
         "--dest=org.freedesktop.systemd1",
         "/org/freedesktop/systemd1",
         "org.freedesktop.systemd1.Manager.GetUnitByPID",
-        "uint32:%d"%pid,
+        "uint32:%d" % pid,
     ]
     try:
         out = helper(cmd)
@@ -112,6 +125,7 @@ def unit_name(pid):
 
     return re.sub(" +variant +", "", out.rstrip())
 
+
 def has_changed(filename, old_inode):
     """Given a path name, and an old inode, will return (False, old_inode)
     if the file has not changed on disk, or (True, new_inode) if it has
@@ -126,11 +140,13 @@ def has_changed(filename, old_inode):
         return True, stres.st_ino
     return False, old_inode
 
+
 def get_process_info(pid):
-    contents = open("/proc/%d/cmdline" % pid).read().split('\0')
-    if contents[-1] == '':
+    contents = open("/proc/%d/cmdline" % pid).read().split("\0")
+    if contents[-1] == "":
         contents.pop()
     return " ".join(contents).replace("\n", " ")
+
 
 def memoize(f, cache):
     def g(*args):
@@ -139,20 +155,22 @@ def memoize(f, cache):
         r = f(*args)
         cache[args] = r
         return r
+
     return g
+
 
 def splitinodepath(buf):
     inode = []
     buf = iter(buf)
     for character in buf:
-        if character == ' ':
-           break
+        if character == " ":
+            break
         inode.append(character)
     inode = int("".join(inode))
     for character in buf:
-        if character != ' ':
+        if character != " ":
             break
-    if character != '':
+    if character != "":
         path = [character]
         for character in buf:
             path.append(character)
@@ -160,6 +178,7 @@ def splitinodepath(buf):
     else:
         path = ""
     return inode, path
+
 
 def get_needs_restarting(ignore_prefixes=None):
     """Gets list of processes that need restarting, each with its reasons.
@@ -182,7 +201,8 @@ def get_needs_restarting(ignore_prefixes=None):
             continue
 
         def skipenoentopen(f):
-            try: return open(f)
+            try:
+                return open(f)
             except IOError as e:
                 if e.errno != errno.ENOENT:
                     raise
@@ -190,10 +210,7 @@ def get_needs_restarting(ignore_prefixes=None):
 
         maps = (
             (x[1], splitinodepath(x[4]))
-            for x in (
-                x.split(" ", 4)
-                for x in skipenoentopen(mapfile)
-                if x )
+            for x in (x.split(" ", 4) for x in skipenoentopen(mapfile) if x)
             if "x" in x[1]
         )
         map_to_inode = collections.OrderedDict(
@@ -215,10 +232,12 @@ def get_needs_restarting(ignore_prefixes=None):
                 if new_inode is None:
                     needs_restarting[pid][name] = "was deleted"
                 else:
-                    needs_restarting[pid][name] = (
-                        "changed inode from %s to %s" % (inode, new_inode)
+                    needs_restarting[pid][name] = "changed inode from %s to %s" % (
+                        inode,
+                        new_inode,
                     )
     return needs_restarting
+
 
 def add_package_info(needs_restarting):
     """Take the result of needs_restarting and substitute files
@@ -239,6 +258,7 @@ def add_package_info(needs_restarting):
                 new_needs_restarting[pid][name] = reason
     return new_needs_restarting
 
+
 def aggregate_by_systemd_service(needs_restarting):
     by_service = collections.OrderedDict()
     for pid, files in list(needs_restarting.items()):
@@ -248,11 +268,14 @@ def aggregate_by_systemd_service(needs_restarting):
         by_service[unitname].append((pid, files))
     return by_service
 
+
 def get_parser():
     parser = argparse.ArgumentParser(
-        description=("Show services in need of restart and processes "
-                     "keeping files open that were deleted or updated "
-                     "since they were opened by those processes.")
+        description=(
+            "Show services in need of restart and processes "
+            "keeping files open that were deleted or updated "
+            "since they were opened by those processes."
+        )
     )
     parser.add_argument(
         "-b",
@@ -264,7 +287,7 @@ def get_parser():
     parser.add_argument(
         "-p",
         help="show updated packages instead of updated paths whenever "
-             "possible; has no effect when -b is specified",
+        "possible; has no effect when -b is specified",
         action="store_true",
         dest="pkgs",
         default=False,
@@ -277,23 +300,36 @@ def get_parser():
         default=False,
     )
     parser.add_argument(
+        "-u",
+        help="ignore the systemd unit containing needs-restart",
+        action="store_true",
+        dest="ignore_self_and_parents",
+        default=False,
+    )
+    parser.add_argument(
         "-i",
-        metavar='PATH_PREFIX',
-        help=("ignore deleted / modified mmap()ed path(s) starting "
-              "with this prefix; you can specify this parameter "
-              "multiple times"),
+        metavar="PATH_PREFIX",
+        help=(
+            "ignore deleted / modified mmap()ed path(s) starting "
+            "with this prefix; you can specify this parameter "
+            "multiple times"
+        ),
         action="append",
         dest="ignore_prefixes",
     )
     return parser
 
+
 def get_column_width():
     try:
-        rows, columns = subprocess.check_output(['stty', 'size'], stderr=open(os.devnull, "w")).split()
+        rows, columns = subprocess.check_output(
+            ["stty", "size"], stderr=open(os.devnull, "w")
+        ).split()
         columns = int(columns)
     except subprocess.CalledProcessError:
         columns = None
     return columns
+
 
 def main():
     args = get_parser().parse_args()
@@ -303,11 +339,15 @@ def main():
     if args.pkgs:
         needs_restarting = add_package_info(needs_restarting)
     by_service = aggregate_by_systemd_service(needs_restarting)
+    my_unit_name = unit_name(os.getpid())
     for service, processes in list(by_service.items()):
-        if args.system_only and service and (
-            service.startswith("user@") or
-            service.startswith("session-")
+        if (
+            args.system_only
+            and service
+            and (service.startswith("user@") or service.startswith("session-"))
         ):
+            continue
+        if args.ignore_self_and_parents and my_unit_name == service:
             continue
         if args.bare:
             if service is not None:
@@ -321,10 +361,11 @@ def main():
                 cmd = get_process_info(pid)
                 line = "    command: %s" % cmd
                 if columns is not None and len(line) > columns:
-                    line = line[:columns-3] + "..."
+                    line = line[: columns - 3] + "..."
                 print(line)
                 for f, reason in list(files.items()):
                     print("    *", f, reason)
+
 
 if __name__ == "__main__":
     main()
