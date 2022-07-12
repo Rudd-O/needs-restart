@@ -9,7 +9,6 @@ import glob
 import os
 import re
 import subprocess
-import sys
 import tempfile
 
 
@@ -19,7 +18,7 @@ class HelperError(subprocess.CalledProcessError):
         self.erroutput = erroutput
 
     def __str__(self):
-        return "Command '%s' returned non-zero exit status %d with stderr %r" % (
+        return "Command '%s' exited with status %d and stderr %r" % (
             self.cmd,
             self.returncode,
             self.erroutput,
@@ -60,7 +59,12 @@ def helper(cmd):
 
     errfile = tempfile.TemporaryFile()
     try:
-        out = subprocess.check_output(cmd, stderr=errfile, env=env).decode("utf-8")
+        out = subprocess.check_output(
+            cmd,
+            stderr=errfile,
+            env=env,
+            universal_newlines=True,
+        )
     except subprocess.CalledProcessError as e:
         errfile.seek(0, 0)
         erroutput = errfile.read().decode("utf-8")
@@ -78,7 +82,8 @@ def package(f):
     try:
         out = helper(cmd)
     except HelperError as e:
-        if e.returncode == 1 and e.erroutput.endswith("No such file or directory\n"):
+        enoent = "No such file or directory\n"
+        if e.returncode == 1 and e.erroutput.endswith(enoent):
             return None
         raise
     if out.endswith("is not owned by any package\n"):
@@ -101,7 +106,8 @@ def unit_name(pid):
     try:
         out = helper(cmd)
     except HelperError as e:
-        if e.returncode == 1 and "does not belong to any loaded unit" in e.erroutput:
+        loadedunit = "does not belong to any loaded unit"
+        if e.returncode == 1 and loadedunit in e.erroutput:
             return None
         raise DBusError(e.returncode, e.cmd, e.output, e.erroutput)
 
@@ -117,7 +123,6 @@ def unit_name(pid):
         "string:org.freedesktop.systemd1.Unit",
         "string:Id",
     ]
-    errfile = tempfile.TemporaryFile()
     try:
         out = helper(cmd)
     except HelperError as e:
@@ -193,7 +198,7 @@ def get_needs_restarting(ignore_prefixes=None):
 
     cache = dict()
     hc = memoize(has_changed, cache)
-    needs_restarting = collections.OrderedDict()
+    to_restart = collections.OrderedDict()
     for mapfile in glob.glob("/proc/*/maps"):
         try:
             pid = int(mapfile.split("/")[2])
@@ -223,20 +228,20 @@ def get_needs_restarting(ignore_prefixes=None):
         for name, inode in list(map_to_inode.items()):
             if name.endswith(" (deleted)") and not os.path.exists(name):
                 name = name[:-10]
-            if pid in needs_restarting and name in needs_restarting[pid]:
+            if pid in to_restart and name in to_restart[pid]:
                 continue
             changed, new_inode = hc(name, inode)
             if changed:
-                if pid not in needs_restarting:
-                    needs_restarting[pid] = collections.OrderedDict()
+                if pid not in to_restart:
+                    to_restart[pid] = collections.OrderedDict()
                 if new_inode is None:
-                    needs_restarting[pid][name] = "was deleted"
+                    to_restart[pid][name] = "was deleted"
                 else:
-                    needs_restarting[pid][name] = "changed inode from %s to %s" % (
+                    to_restart[pid][name] = "changed inode from %s to %s" % (
                         inode,
                         new_inode,
                     )
-    return needs_restarting
+    return to_restart
 
 
 def add_package_info(needs_restarting):
@@ -252,7 +257,8 @@ def add_package_info(needs_restarting):
             if pkg:
                 inpkg = True
                 if pkg not in already:
-                    new_needs_restarting[pid][pkg] = "was installed as an update"
+                    u = "was installed as an update"
+                    new_needs_restarting[pid][pkg] = u
                     already.add(pkg)
             if not inpkg:
                 new_needs_restarting[pid][name] = reason
